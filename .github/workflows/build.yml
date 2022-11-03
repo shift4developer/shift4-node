@@ -1,0 +1,32 @@
+name: Build and validate
+on: [ push ]
+
+jobs:
+
+  tests:
+    name: Integration Tests
+    env:
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [ lts/fermium, lts/gallium, lts/* ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      - run: npm test
+
+  style-check:
+    name: Style Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+      - run: npm ci
+      - run: npm run stylecheck
