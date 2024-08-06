@@ -1,7 +1,9 @@
+const crypto = require('crypto')
 const { Shift4Gateway } = require('../../')
 const cards = require('../data/cards')
 const plans = require('../data/plans')
 const customers = require('../data/customers')
+const assertShift4Exception = require("./assertShift4Exception");
 
 describe('Subscriptions', function () {
   const api = new Shift4Gateway()
@@ -25,8 +27,7 @@ describe('Subscriptions', function () {
     const plan = await api.plans.create(plans.plan())
     const customer = await api.customers.create(customers.customer({ card: cards.card() }))
     const created = await api.subscriptions.create({ planId: plan.id, customerId: customer.id })
-    // when
-    // given
+
     // when
     const updated = await api.subscriptions.update(created.id, {
       shipping: {
@@ -41,6 +42,7 @@ describe('Subscriptions', function () {
         }
       }
     })
+
     // then
     expect(created.shipping).toBeUndefined()
     expect(updated.id).toEqual(created.id)
@@ -86,5 +88,102 @@ describe('Subscriptions', function () {
     // then
     expect(all).toEqual([subscription2.id, subscription1.id])
     expect(deleted).toEqual([deletedSubscription.id])
+  })
+
+
+  it('should not create duplicate if same idempotency key is used', async () => {
+    // given
+    const idempotencyKey = crypto.randomUUID()
+
+    const plan = await api.plans.create(plans.plan())
+    const customer = await api.customers.create(customers.customer({ card: cards.card() }))
+    const subscriptionReq = { planId: plan.id, customerId: customer.id }
+
+    // when
+    const firstCallResponse = await api.subscriptions.create(subscriptionReq, { 'idempotencyKey': idempotencyKey})
+    const secondCallResponse = await api.subscriptions.create(subscriptionReq, { 'idempotencyKey': idempotencyKey})
+
+    // then
+    expect(secondCallResponse.id).toEqual(firstCallResponse.id)
+  })
+
+  it('should create two instances if different idempotency keys are used', async () => {
+    // given
+    const idempotencyKey1 = crypto.randomUUID()
+    const idempotencyKey2 = crypto.randomUUID()
+
+    const plan = await api.plans.create(plans.plan())
+    const customer = await api.customers.create(customers.customer({ card: cards.card() }))
+    const subscriptionReq = { planId: plan.id, customerId: customer.id }
+
+    // when
+    const firstCallResponse = await api.subscriptions.create(subscriptionReq, { 'idempotencyKey': idempotencyKey1})
+    const secondCallResponse = await api.subscriptions.create(subscriptionReq, { 'idempotencyKey': idempotencyKey2})
+
+    // then
+    expect(secondCallResponse.id).not.toEqual(firstCallResponse.id)
+  })
+
+  it('should create two instances if no idempotency keys are used', async () => {
+    // given
+    const plan = await api.plans.create(plans.plan())
+    const customer = await api.customers.create(customers.customer({ card: cards.card() }))
+    const subscriptionReq = { planId: plan.id, customerId: customer.id }
+
+    // when
+    const firstCallResponse = await api.subscriptions.create(subscriptionReq)
+    const secondCallResponse = await api.subscriptions.create(subscriptionReq)
+
+    // then
+    expect(secondCallResponse.id).not.toEqual(firstCallResponse.id)
+  })
+
+  it('should throw exception if same idempotency key is used for two different create requests', async () => {
+    // given
+    const idempotencyKey = crypto.randomUUID()
+
+    const plan = await api.plans.create(plans.plan())
+    const customer = await api.customers.create(customers.customer({ card: cards.card() }))
+    const subscriptionReq = { planId: plan.id, customerId: customer.id }
+
+    // when
+    await api.subscriptions.create(subscriptionReq, { 'idempotencyKey': idempotencyKey})
+    subscriptionReq['planId'] = 42
+    const exception = await assertShift4Exception(() => api.subscriptions.create(subscriptionReq, { 'idempotencyKey': idempotencyKey}));
+
+    // then
+    expect(exception.type).toEqual('invalid_request')
+    expect(exception.message).toEqual('Idempotent key used for request with different parameters.')
+  })
+
+  it('should throw exception if same idempotency key is used for two different update requests', async () => {
+    // given
+    const idempotencyKey = crypto.randomUUID()
+
+    const plan = await api.plans.create(plans.plan())
+    const customer = await api.customers.create(customers.customer({ card: cards.card() }))
+    const created = await api.subscriptions.create({ planId: plan.id, customerId: customer.id })
+    const updateRequest = {
+      shipping: {
+        name: 'Updated shipping',
+        address: {
+          line1: 'Updated line1',
+          line2: 'Updated line2',
+          zip: 'Updated zip',
+          city: 'Updated city',
+          state: 'Updated state',
+          country: 'CH'
+        }
+      }
+    }
+
+    // when
+    await api.subscriptions.update(created.id, updateRequest, { 'idempotencyKey': idempotencyKey})
+    updateRequest['name'] = 'Updated shipping - again'
+    const exception = await assertShift4Exception(() => api.subscriptions.update(created.id, updateRequest, { 'idempotencyKey': idempotencyKey}))
+
+    // then
+    expect(exception.type).toEqual('invalid_request')
+    expect(exception.message).toEqual('Idempotent key used for request with different parameters.')
   })
 })
