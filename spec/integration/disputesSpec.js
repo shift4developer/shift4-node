@@ -1,6 +1,8 @@
+const crypto = require('crypto')
 const { Shift4Gateway } = require('../../')
 const cards = require('../data/cards')
 const charges = require('../data/charges')
+const assertShift4Exception = require("./assertShift4Exception");
 
 describe('Disputes', function () {
   const api = new Shift4Gateway()
@@ -57,4 +59,22 @@ describe('Disputes', function () {
     }
     throw new Error('timeout')
   }
+
+  it('should throw exception if same idempotency key is used for two different update requests', async () => {
+    // given
+    const idempotencyKey = crypto.randomUUID()
+
+    const [dispute] = await createDispute()
+    const customerName = 'Test Customer'
+    const updateRequest = { evidence: { customerName } }
+
+    // when
+    await api.disputes.update(dispute.id, updateRequest, { 'idempotencyKey': idempotencyKey})
+    updateRequest['evidence']['customerName'] = 'Different Customer'
+    const exception = await assertShift4Exception(() => api.disputes.update(dispute.id, updateRequest, { 'idempotencyKey': idempotencyKey}))
+
+    // then
+    expect(exception.type).toEqual('invalid_request')
+    expect(exception.message).toEqual('Idempotent key used for request with different parameters.')
+  })
 })
