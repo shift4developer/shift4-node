@@ -1,6 +1,6 @@
 {
   "name": "shift4",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Shift4 Node.js Library",
   "main": "lib/shift4.js",
   "scripts": {
@@ -26,8 +26,8 @@
   },
   "homepage": "https://github.com/shift4developer/shift4-node#readme",
   "dependencies": {
-    "form-data": "^4.0.0",
-    "node-fetch": "^2.6.6"
+    "form-data": "^4.0.2",
+    "node-fetch": "^2.6.13"
   },
   "devDependencies": {
     "dotenv": "^10.0.0",
