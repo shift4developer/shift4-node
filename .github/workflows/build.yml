@@ -7,6 +7,8 @@ jobs:
     name: Integration Tests
     env:
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      MERCHANT_ID: ${{ secrets.MERCHANT_ID }}
+      MERCHANT_SECRET_KEY: ${{ secrets.MERCHANT_SECRET_KEY }}
     strategy:
       fail-fast: false
       matrix:
